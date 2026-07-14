@@ -83,6 +83,7 @@ use Xingen\Sdk\Invoices\AddressInput;
 use Xingen\Sdk\Invoices\InvoiceSubmission;
 use Xingen\Sdk\Invoices\LineInput;
 use Xingen\Sdk\Invoices\PartyInput;
+use Xingen\Sdk\Invoices\PaymentMeansInput;
 
 $submission = new InvoiceSubmission(
     invoiceNumber: 'INV-2024-0042',
@@ -109,10 +110,20 @@ $submission = new InvoiceSubmission(
             taxRate: '19',
         ),
     ],
+    paymentMeans: [
+        new PaymentMeansInput(typeCode: '58', creditTransferAccountId: 'DE89370400440532013000'),
+    ],
 );
 
 $result = $client->invoices->submitAndWait($submission);
 ```
+
+`InvoiceSubmission` has full parity with the backend's domain model — every invoice type it can
+validate, it can also submit, including non-standard VAT categories (exempt/reverse-charge/export
+via `LineInput::$taxCategoryCode` + `$exemptionReason`/`$exemptionReasonCode`), `payee`/
+`taxRepresentative`, `delivery`, `invoicePeriod`, `precedingInvoiceReferences` (for credit notes),
+and the full BT-11..BT-19 document reference fields. See the constructor parameters on
+`InvoiceSubmission` and its nested value objects for the complete set.
 
 SAP S/4HANA OData supplier-invoice payloads are supported as a thin passthrough — pass a raw JSON
 string or a plain array rather than a fully typed model:

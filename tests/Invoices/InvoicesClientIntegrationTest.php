@@ -6,9 +6,19 @@ namespace Xingen\Sdk\Tests\Invoices;
 
 use Xingen\Sdk\Internal\Json;
 use Xingen\Sdk\Invoices\AddressInput;
+use Xingen\Sdk\Invoices\AllowanceChargeInput;
+use Xingen\Sdk\Invoices\ContactInput;
+use Xingen\Sdk\Invoices\DeliveryInput;
+use Xingen\Sdk\Invoices\InvoicePeriodInput;
 use Xingen\Sdk\Invoices\InvoiceSubmission;
+use Xingen\Sdk\Invoices\ItemAttributeInput;
+use Xingen\Sdk\Invoices\ItemClassificationInput;
 use Xingen\Sdk\Invoices\LineInput;
+use Xingen\Sdk\Invoices\PartyIdentifierInput;
 use Xingen\Sdk\Invoices\PartyInput;
+use Xingen\Sdk\Invoices\PaymentMeansInput;
+use Xingen\Sdk\Invoices\PrecedingInvoiceReferenceInput;
+use Xingen\Sdk\Invoices\SupportingDocumentInput;
 use Xingen\Sdk\Models\ExtractionModelTier;
 use Xingen\Sdk\Models\InvoiceStatus;
 use Xingen\Sdk\Models\ValidationProfile;
@@ -68,6 +78,105 @@ final class InvoicesClientIntegrationTest extends LoopbackTestCase
         $this->assertSame('Berlin', $body['supplier']['address']['city']);
         $this->assertSame('DE', $body['supplier']['address']['countryCode']);
         $this->assertSame('Software License Q1', $body['lines'][0]['description']);
+    }
+
+    public function testSubmitSendsFullDomainModelFieldsWhenPresent(): void
+    {
+        $this->server->route('/v1/invoices', 202, '{"id":"inv_full","status":"processing"}');
+
+        $submission = new InvoiceSubmission(
+            invoiceNumber: 'INV-2024-0099',
+            issueDate: '2024-03-15',
+            currency: 'EUR',
+            validationProfile: ValidationProfile::EN16931,
+            supplier: new PartyInput(
+                name: 'Acme GmbH',
+                registrationName: 'Acme GmbH Legal',
+                vatId: 'DE123456789',
+                address: new AddressInput(city: 'Berlin', countryCode: 'DE'),
+                contact: new ContactInput(name: 'Jane Doe', email: 'jane@acme.example'),
+                identifiers: [
+                    new PartyIdentifierInput(id: 'DE98ZZZ09999999999', schemeId: 'SEPA'),
+                ],
+            ),
+            buyer: new PartyInput(
+                name: 'Buyer Co',
+                address: new AddressInput(countryCode: 'DE'),
+            ),
+            dueDate: '2024-04-14',
+            paymentTermsNote: 'Net 30',
+            orderReference: 'PO-1',
+            notes: ['Thank you for your business'],
+            precedingInvoiceReferences: [
+                new PrecedingInvoiceReferenceInput(id: 'INV-2024-0001', issueDate: '2024-01-01'),
+            ],
+            supportingDocuments: [
+                new SupportingDocumentInput(id: 'DOC-1', typeCode: '50', description: 'Delivery note'),
+            ],
+            invoicePeriod: new InvoicePeriodInput(startDate: '2024-03-01', endDate: '2024-03-31'),
+            delivery: new DeliveryInput(
+                partyName: 'Warehouse Co',
+                address: new AddressInput(city: 'Hamburg', countryCode: 'DE'),
+            ),
+            payee: new PartyInput(name: 'Payee GmbH', address: new AddressInput(countryCode: 'DE')),
+            lines: [
+                new LineInput(
+                    description: 'Consulting services',
+                    quantity: '1',
+                    unit: 'C62',
+                    price: '500.00',
+                    taxRate: '19',
+                    itemName: 'Consulting',
+                    classifications: [new ItemClassificationInput(code: '1234')],
+                    attributes: [new ItemAttributeInput(name: 'Color', value: 'Blue')],
+                ),
+                new LineInput(
+                    description: 'Export sale',
+                    quantity: '1',
+                    unit: 'C62',
+                    price: '100.00',
+                    taxRate: '0',
+                    taxCategoryCode: 'G',
+                    exemptionReason: 'Export outside the EU',
+                    exemptionReasonCode: 'VATEX-EU-G',
+                ),
+            ],
+            paymentMeans: [
+                new PaymentMeansInput(typeCode: '58', creditTransferAccountId: 'DE89370400440532013000'),
+            ],
+            allowanceCharges: [
+                new AllowanceChargeInput(charge: true, amount: '5.00', vatCategoryCode: 'S', vatRate: '19'),
+            ],
+        );
+
+        $result = $this->client->invoices->submit($submission);
+
+        $this->assertSame('inv_full', $result->id);
+
+        $body = Json::decode($this->server->recordedRequestsFor('/v1/invoices')[0]['body']);
+
+        $this->assertSame('2024-04-14', $body['dueDate']);
+        $this->assertSame('Net 30', $body['paymentTermsNote']);
+        $this->assertSame('PO-1', $body['orderReference']);
+        $this->assertSame(['Thank you for your business'], $body['notes']);
+        $this->assertSame('INV-2024-0001', $body['precedingInvoiceReferences'][0]['id']);
+        $this->assertSame('DOC-1', $body['supportingDocuments'][0]['id']);
+        $this->assertSame('2024-03-01', $body['invoicePeriod']['startDate']);
+        $this->assertSame('Warehouse Co', $body['delivery']['partyName']);
+        $this->assertSame('Acme GmbH Legal', $body['supplier']['registrationName']);
+        $this->assertSame('Jane Doe', $body['supplier']['contact']['name']);
+        $this->assertSame('DE98ZZZ09999999999', $body['supplier']['identifiers'][0]['id']);
+        $this->assertSame('SEPA', $body['supplier']['identifiers'][0]['schemeId']);
+        $this->assertSame('Payee GmbH', $body['payee']['name']);
+        $this->assertSame('1234', $body['lines'][0]['classifications'][0]['code']);
+        $this->assertSame('Blue', $body['lines'][0]['attributes'][0]['value']);
+        $this->assertSame('G', $body['lines'][1]['taxCategoryCode']);
+        $this->assertSame('Export outside the EU', $body['lines'][1]['exemptionReason']);
+        $this->assertSame('VATEX-EU-G', $body['lines'][1]['exemptionReasonCode']);
+        $this->assertSame('58', $body['paymentMeans'][0]['typeCode']);
+        $this->assertSame('DE89370400440532013000', $body['paymentMeans'][0]['creditTransferAccountId']);
+        $this->assertSame(true, $body['allowanceCharges'][0]['charge']);
+        $this->assertSame('5.00', $body['allowanceCharges'][0]['amount']);
     }
 
     public function testValidateFileSendsProfileAsQueryParamAndFileAsMultipartField(): void
