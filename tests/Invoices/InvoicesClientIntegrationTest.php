@@ -8,6 +8,7 @@ use Xingen\Sdk\Internal\Json;
 use Xingen\Sdk\Invoices\InvoiceSubmission;
 use Xingen\Sdk\Invoices\LineInput;
 use Xingen\Sdk\Invoices\PartyInput;
+use Xingen\Sdk\Models\ExtractionModelTier;
 use Xingen\Sdk\Models\InvoiceStatus;
 use Xingen\Sdk\Models\ValidationProfile;
 use Xingen\Sdk\Tests\Support\LoopbackTestCase;
@@ -116,6 +117,66 @@ final class InvoicesClientIntegrationTest extends LoopbackTestCase
         $request = $this->server->recordedRequestsFor('/v1/invoices/validate/odata')[0];
         $this->assertSame('profile=EN16931', $request['query']);
         $this->assertSame('{"SupplierInvoice":"raw-payload"}', $request['body']);
+    }
+
+    public function testExtractInvoiceSendsProfileAndTierAsQueryParamsAndFileAsMultipartField(): void
+    {
+        $this->server->route('/v1/invoices/extract', 202, '{"id":"inv_789","status":"processing"}');
+
+        $result = $this->client->invoices->extractInvoice(
+            ['invoice.pdf', '%PDF-1.4'],
+            ValidationProfile::EN16931,
+            ExtractionModelTier::ACCURATE,
+        );
+
+        $this->assertSame('inv_789', $result->id);
+
+        $request = $this->server->recordedRequestsFor('/v1/invoices/extract')[0];
+        $this->assertSame('profile=EN16931&tier=ACCURATE', $request['query']);
+        $this->assertStringStartsWith('multipart/form-data; boundary=', $request['headers']['CONTENT-TYPE']);
+
+        $body = $request['body'];
+        $this->assertStringContainsString('name="file"; filename="invoice.pdf"', $body);
+        $this->assertStringContainsString('Content-Type: application/pdf', $body);
+        // the gotcha this test guards against: profile/tier must never be sent as form fields
+        $this->assertStringNotContainsString('name="profile"', $body);
+        $this->assertStringNotContainsString('name="tier"', $body);
+    }
+
+    public function testPatchInvoiceSendsMergePatchAndDecodesUpdatedRecord(): void
+    {
+        $this->server->route('/v1/invoices/inv_01HXYZ', 200, self::FIXTURE);
+
+        $record = $this->client->invoices->patchInvoice('inv_01HXYZ', ['currency' => 'USD']);
+
+        $request = $this->server->recordedRequestsFor('/v1/invoices/inv_01HXYZ')[0];
+        $this->assertSame('PATCH', $request['method']);
+        $this->assertSame('{"currency":"USD"}', $request['body']);
+        $this->assertSame('inv_01HXYZ', $record->id);
+    }
+
+    public function testPatchInvoiceAcceptsRawJsonStringPatch(): void
+    {
+        $this->server->route('/v1/invoices/inv_01HXYZ', 200, self::FIXTURE);
+
+        $this->client->invoices->patchInvoice('inv_01HXYZ', '{"buyerReference":"991-12345-06"}');
+
+        $request = $this->server->recordedRequestsFor('/v1/invoices/inv_01HXYZ')[0];
+        $this->assertSame('PATCH', $request['method']);
+        $this->assertSame('{"buyerReference":"991-12345-06"}', $request['body']);
+    }
+
+    public function testGetAutoFilledFieldsDecodesMapByProfile(): void
+    {
+        $this->server->route('/v1/invoices/auto-filled-fields', 200,
+            '{"EN16931":[{"field":"typeCode","value":"380","reason":"Defaults to a commercial invoice."}]}');
+
+        $fields = $this->client->invoices->getAutoFilledFields();
+
+        $this->assertCount(1, $fields['EN16931']);
+        $this->assertSame('typeCode', $fields['EN16931'][0]->field);
+        $this->assertSame('380', $fields['EN16931'][0]->value);
+        $this->assertSame('Defaults to a commercial invoice.', $fields['EN16931'][0]->reason);
     }
 
     public function testDownloadPdfReturnsRawBytesWithPdfAccept(): void

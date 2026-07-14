@@ -1,6 +1,15 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
+
+- AI-based PDF invoice extraction: `extractInvoice`/`extractInvoiceAndWait` (`POST /v1/invoices/extract`),
+  new `ExtractionModelTier` enum (`FAST`/`ACCURATE`) and `InvoiceRecord::$extractionTier`.
+- `patchInvoice` — correct invoice fields via JSON merge-patch and re-validate synchronously
+  (`PATCH /v1/invoices/{id}`).
+- `getAutoFilledFields` — list the invoice fields the backend fills in automatically, per
+  validation profile (`GET /v1/invoices/auto-filled-fields`), via the new `AutoFilledField` model.
+
+## 0.1.0
 
 Initial release, ported 1:1 from the
 [Java SDK](https://github.com/nko-technologies/xingen-java-sdk) (via the Python/TypeScript ports):

@@ -112,6 +112,42 @@ string or a plain array rather than a fully typed model:
 $client->invoices->submitOdata($rawOdataJson, ValidationProfile::EN16931);
 ```
 
+## Extract an invoice from a PDF (AI)
+
+Upload a plain invoice PDF — including scanned/image-based PDFs — and let the backend extract
+structured fields with Claude. Works exactly like the other submit endpoints: async, so use
+`extractInvoiceAndWait` or the low-level `extractInvoice`/`get` pair.
+
+```php
+use Xingen\Sdk\Models\ExtractionModelTier;
+
+$result = $client->invoices->extractInvoiceAndWait(
+    'scanned-invoice.pdf',
+    ValidationProfile::EN16931,
+    ExtractionModelTier::FAST,   // or ACCURATE -- higher accuracy, Pro subscription required
+);
+```
+
+If the extraction missed a field or validation flagged something, correct it with a JSON
+merge-patch (RFC 7386) and re-validate synchronously — only invoices that finished processing
+(`VALIDATED` or `FAILED_VALIDATION`) can be corrected. Array fields (`lines`, `paymentMeans`,
+`allowanceCharges`, `taxBreakdowns`) are replaced wholesale when present in the patch:
+
+```php
+$corrected = $client->invoices->patchInvoice($result->id, [
+    'currency' => 'EUR',
+    'buyerReference' => '991-12345-06',
+]);
+```
+
+To find out which fields the backend fills in automatically per profile (so you know what *not*
+to prompt the user for):
+
+```php
+$autoFilled = $client->invoices->getAutoFilledFields();
+// ['EN16931' => [AutoFilledField, ...], 'PEPPOL' => [...], ...]
+```
+
 ## List and retrieve invoices
 
 ```php

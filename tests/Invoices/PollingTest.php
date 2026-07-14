@@ -11,6 +11,7 @@ use Xingen\Sdk\Invoices\LineInput;
 use Xingen\Sdk\Invoices\PartyInput;
 use Xingen\Sdk\Invoices\PollOptions;
 use Xingen\Sdk\Invoices\Polling;
+use Xingen\Sdk\Models\ExtractionModelTier;
 use Xingen\Sdk\Models\InvoiceStatus;
 use Xingen\Sdk\Models\ValidationProfile;
 use Xingen\Sdk\Tests\Support\LoopbackTestCase;
@@ -94,6 +95,26 @@ final class PollingTest extends LoopbackTestCase
             $this->assertSame('inv_3', $e->partialResult->id);
             $this->assertSame(InvoiceStatus::PROCESSING, $e->partialResult->status);
         }
+    }
+
+    public function testExtractInvoiceAndWaitPollsUntilValidated(): void
+    {
+        $this->server->route('/v1/invoices/extract', 202, '{"id":"inv_5","status":"processing"}');
+        $this->server->routeSequence('/v1/invoices/inv_5', [
+            ['status' => 200, 'body' => self::recordJson('inv_5', 'processing', true)],
+            ['status' => 200, 'body' => self::recordJson('inv_5', 'validated', true)],
+        ]);
+
+        $record = $this->client->invoices->extractInvoiceAndWait(
+            ['scanned-invoice.pdf', '%PDF-1.4'],
+            ValidationProfile::EN16931,
+            ExtractionModelTier::FAST,
+        );
+
+        $this->assertSame(InvoiceStatus::VALIDATED, $record->status);
+
+        $request = $this->server->recordedRequestsFor('/v1/invoices/extract')[0];
+        $this->assertSame('profile=EN16931&tier=FAST', $request['query']);
     }
 
     public function testCancellationCheckAbortsPolling(): void

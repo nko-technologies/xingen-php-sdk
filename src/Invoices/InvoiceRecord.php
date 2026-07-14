@@ -24,6 +24,9 @@ final class InvoiceRecord
         public readonly string $uploadedBy,
         public readonly bool $sandbox = false,
         public readonly ?string $apiKeyId = null,
+        /** Extraction quality tier used ("FAST"/"ACCURATE") -- only set for AI PDF extractions
+         * ({@see self::$invoiceFormat} === "PDF_AI"). */
+        public readonly ?string $extractionTier = null,
     ) {
     }
 
@@ -42,6 +45,7 @@ final class InvoiceRecord
             uploadedBy: Wire::str($w, 'uploadedBy') ?? '',
             sandbox: Wire::bool($w, 'sandbox'),
             apiKeyId: Wire::str($w, 'apiKeyId'),
+            extractionTier: Wire::str($w, 'extractionTier'),
         );
     }
 }

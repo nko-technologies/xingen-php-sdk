@@ -111,4 +111,23 @@ final class Wire
 
         return $result;
     }
+
+    /** Decodes a top-level JSON object whose values are themselves lists of items, e.g.
+     * `{"EN16931": [...], "PEPPOL": [...]}`. Unlike {@see self::arr()}, this reads the whole
+     * `$raw` map rather than a single nested key -- there is no wrapping field to key into.
+     * @param array<string, mixed> $raw
+     * @template T
+     * @param callable(mixed): T $fromWire
+     * @return array<string, list<T>> */
+    public static function arrMap(array $raw, callable $fromWire): array
+    {
+        $result = [];
+        foreach ($raw as $key => $value) {
+            if (is_string($key) && is_array($value)) {
+                $result[$key] = array_values(array_map($fromWire, $value));
+            }
+        }
+
+        return $result;
+    }
 }
