@@ -10,6 +10,9 @@ final class PartyInput
         public readonly string $name,
         public readonly ?string $vatId = null,
         public readonly ?string $leitwegId = null,
+        /** Postal address (BG-5/BG-8) -- mandatory for every profile; the backend rejects a
+         * party with no address. */
+        public readonly ?AddressInput $address = null,
     ) {
     }
 
@@ -20,6 +23,7 @@ final class PartyInput
             'name' => $this->name,
             'vatId' => $this->vatId,
             'leitwegId' => $this->leitwegId,
+            'address' => $this->address?->toArray(),
         ];
     }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Xingen\Sdk\Tests\Invoices;
 
 use Xingen\Sdk\Internal\Json;
+use Xingen\Sdk\Invoices\AddressInput;
 use Xingen\Sdk\Invoices\InvoiceSubmission;
 use Xingen\Sdk\Invoices\LineInput;
 use Xingen\Sdk\Invoices\PartyInput;
@@ -37,7 +38,11 @@ final class InvoicesClientIntegrationTest extends LoopbackTestCase
             issueDate: '2024-03-15',
             currency: 'EUR',
             validationProfile: ValidationProfile::XRECHNUNG,
-            supplier: new PartyInput(name: 'Acme GmbH', vatId: 'DE123456789'),
+            supplier: new PartyInput(
+                name: 'Acme GmbH',
+                vatId: 'DE123456789',
+                address: new AddressInput(city: 'Berlin', countryCode: 'DE'),
+            ),
             buyer: new PartyInput(name: 'Buyer Co', leitwegId: '991-12345-06'),
             buyerReference: '991-12345-06',
             lines: [
@@ -60,6 +65,8 @@ final class InvoicesClientIntegrationTest extends LoopbackTestCase
         $this->assertSame('INV-2024-0042', $body['invoiceNumber']);
         $this->assertSame('XRECHNUNG', $body['validationProfile']);
         $this->assertSame('DE123456789', $body['supplier']['vatId']);
+        $this->assertSame('Berlin', $body['supplier']['address']['city']);
+        $this->assertSame('DE', $body['supplier']['address']['countryCode']);
         $this->assertSame('Software License Q1', $body['lines'][0]['description']);
     }
 

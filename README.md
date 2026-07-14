@@ -79,6 +79,7 @@ hold the file bytes in memory instead of a path.
 ## Submit a structured invoice (JSON)
 
 ```php
+use Xingen\Sdk\Invoices\AddressInput;
 use Xingen\Sdk\Invoices\InvoiceSubmission;
 use Xingen\Sdk\Invoices\LineInput;
 use Xingen\Sdk\Invoices\PartyInput;
@@ -88,8 +89,16 @@ $submission = new InvoiceSubmission(
     issueDate: '2024-03-15',
     currency: 'EUR',
     validationProfile: ValidationProfile::XRECHNUNG,
-    supplier: new PartyInput(name: 'Acme GmbH', vatId: 'DE123456789'),
-    buyer: new PartyInput(name: 'Buyer Co', leitwegId: '991-12345-06'),
+    supplier: new PartyInput(
+        name: 'Acme GmbH',
+        vatId: 'DE123456789',
+        address: new AddressInput(city: 'Berlin', countryCode: 'DE'),
+    ),
+    buyer: new PartyInput(
+        name: 'Buyer Co',
+        leitwegId: '991-12345-06',
+        address: new AddressInput(countryCode: 'DE'),
+    ),
     buyerReference: '991-12345-06',
     lines: [
         new LineInput(
